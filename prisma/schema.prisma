@@ -1,0 +1,1118 @@
+// Church Mobile Application - Prisma Schema
+// Version: 1.0
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum UserRole {
+  MEMBER
+  WORKER
+  PASTOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  FACEBOOK
+  APPLE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  READY
+  DELIVERED
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum DeliveryType {
+  PICKUP
+  DELIVERY
+  HOME_DELIVERY
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  SUCCESSFUL
+  FAILED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  PAYSTACK
+  BANK_TRANSFER
+  CASH
+}
+
+enum CounselingCategory {
+  MARRIAGE
+  HEALING
+  DELIVERANCE
+  FINANCIAL
+  CAREER
+  FAMILY
+  SPIRITUAL_GROWTH
+  YOUTH
+  OTHER
+}
+
+enum CounselingStatus {
+  SCHEDULED
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum AnnouncementCategory {
+  GENERAL
+  YOUTH
+  WOMEN
+  MEN
+  CHOIR
+  WORKERS
+  URGENT
+}
+
+enum EventCategory {
+  SERVICE
+  CONFERENCE
+  SEMINAR
+  OUTREACH
+  BAPTISM
+  WEDDING
+  CRUSADE
+  YOUTH_EVENT
+  WOMENS_EVENT
+  MENS_EVENT
+  OTHER
+}
+
+enum EventRegistrationStatus {
+  REGISTERED
+  CONFIRMED
+  ATTENDED
+  CANCELLED
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum SermonType {
+  SUNDAY_SERVICE
+  MONDAY_ANOINTING
+  TUESDAY_BIBLE_STUDY
+  FRIDAY_MIRACLE
+  STANDING_IN_THE_GAP
+  CHOIR_MINISTRATION
+  CRUSADE
+  SPECIAL
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  AUDIO
+  DOCUMENT
+  OTHER
+}
+
+enum PrayerRequestStatus {
+  SUBMITTED
+  PRAYING
+  ANSWERED
+  ARCHIVED
+  
+}
+
+enum TestimonyStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
+enum GivingCategory {
+  OFFERING
+  TITHE
+  PARTNERSHIP
+  PROJECT
+  SEED
+  SPECIAL
+}
+
+enum NotificationType {
+  EVENT_REMINDER
+  NEW_BOOK
+  LIVE_STREAM
+  WORDS_OF_WISDOM
+  PRAYER_MEETING
+  DEVOTIONAL
+  ORDER_UPDATE
+  COUNSELING_REMINDER
+  GENERAL
+  TESTIMONY_APPROVED
+  PRAYER_ANSWERED
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  READ
+}
+
+enum GroupType {
+  YOUTH
+  WOMEN
+  MEN
+  CHOIR
+  WORKERS
+  USHERS
+  PROTOCOL
+  MEDIA
+  OTHER
+}
+
+enum GroupPostType {
+  TEXT
+  IMAGE
+  VIDEO
+  LINK
+  POLL
+}
+
+// ============================================
+// USER & AUTHENTICATION
+// ============================================
+
+model User {
+  id            String        @id @default(uuid())
+  email         String        @unique
+  phoneNumber   String?       @unique
+  password      String?       // Null for OAuth users
+  firstName     String
+  lastName      String
+  displayName   String?
+  avatar        String?
+  gender        Gender?
+  dateOfBirth   DateTime?
+  address       String?
+  city          String?
+  state         String?
+  country       String?       @default("Nigeria")
+  
+  // Authentication
+  authProvider  AuthProvider  @default(LOCAL)
+  googleId      String?       @unique
+  facebookId    String?       @unique
+  appleId       String?       @unique
+  isVerified    Boolean       @default(false)
+  isActive      Boolean       @default(true)
+  
+  // Role & Permissions
+  role          UserRole      @default(MEMBER)
+  
+  // FCM Tokens for push notifications
+  fcmTokens     FcmToken[]
+  
+  // Timestamps
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  lastLoginAt   DateTime?
+  deletedAt     DateTime?
+  
+  // Relationships
+  orders                Order[]
+  counselingBookings    CounselingBooking[]
+  eventRegistrations    EventRegistration[]
+  prayerRequests        PrayerRequest[]
+  testimonies           Testimony[]
+  groupPosts            GroupPost[]
+  groupPostLikes        GroupPostLike[]
+  groupMembers          GroupMember[]
+  groupPostComments     GroupPostComment[]
+  devotionalReads       DevotionalRead[]
+  savedWords            SavedWord[]
+  givingRecords         GivingRecord[]
+  notifications         Notification[]
+  sermonProgress        SermonProgress[]
+  media                 Media[]
+  payments               Payment[]
+  refreshTokens         RefreshToken[]
+  
+  @@index([email])
+  @@index([role])
+  @@index([authProvider])
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  token       String    @unique
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt   DateTime
+  createdAt   DateTime  @default(now())
+  revokedAt   DateTime?
+  
+  @@index([userId])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+model FcmToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  device    String?  // Device info
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([userId])
+  @@map("fcm_tokens")
+}
+
+// ============================================
+// BOOK STORE & ORDERS
+// ============================================
+
+model BookCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  image       String?
+  order       Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  
+  books       Book[]
+  
+  @@map("book_categories")
+}
+
+model Book {
+  id              String        @id @default(uuid())
+  title           String
+  slug            String        @unique
+  author          String
+  description     String?       @db.Text
+  categoryId      String
+  category        BookCategory  @relation(fields: [categoryId], references: [id])
+  
+  price           Decimal       @db.Decimal(10, 2)
+  discountPrice   Decimal?      @db.Decimal(10, 2)
+  isbn            String?       @unique
+  
+  coverImage      String?
+  previewPages    String[]      // Array of image URLs
+  pdfUrl          String?       // For digital copies
+  
+  stockQuantity   Int           @default(0)
+  soldCount       Int           @default(0)
+  viewCount       Int           @default(0)
+  
+  isActive        Boolean       @default(true)
+  isFeatured      Boolean       @default(false)
+  isDigital       Boolean       @default(false)
+  
+  // Metadata
+  tags            String[]
+  publishedDate   DateTime?
+  pageCount       Int?
+  
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+  
+  orderItems      OrderItem[]
+  
+  @@index([categoryId])
+  @@index([slug])
+  @@index([title])
+  @@index([author])
+  @@map("books")
+}
+
+model Order {
+  id              String          @id @default(uuid())
+  orderNumber     String          @unique
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  
+  status          OrderStatus     @default(PENDING)
+  deliveryType    DeliveryType
+  
+  // Pricing
+  subtotal        Decimal         @db.Decimal(10, 2)
+  deliveryFee     Decimal         @db.Decimal(10, 2) @default(0)
+  total           Decimal         @db.Decimal(10, 2)
+  
+  // Delivery Details
+  deliveryAddress String?
+  deliveryCity    String?
+  deliveryState   String?
+  recipientName   String?
+  recipientPhone  String?
+  
+  // Payment
+  paymentStatus   PaymentStatus   @default(PENDING)
+  paymentMethod   PaymentMethod?
+  paymentRef      String?         @unique
+  paidAt          DateTime?
+  
+  // Notes
+  customerNotes   String?
+  adminNotes      String?
+  
+  // Timestamps
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  completedAt     DateTime?
+  cancelledAt     DateTime?
+  deletedAt       DateTime?
+  
+  items           OrderItem[]
+  
+  @@index([userId])
+  @@index([orderNumber])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id          String   @id @default(uuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  bookId      String
+  book        Book     @relation(fields: [bookId], references: [id])
+  
+  quantity    Int
+  price       Decimal  @db.Decimal(10, 2)
+  subtotal    Decimal  @db.Decimal(10, 2)
+  
+  createdAt   DateTime @default(now())
+  
+  @@index([orderId])
+  @@index([bookId])
+  @@map("order_items")
+}
+
+// ============================================
+// COUNSELING SYSTEM
+// ============================================
+
+model CounselingSlot {
+  id          String              @id @default(uuid())
+  date        DateTime            // Must be a Wednesday
+  startTime   DateTime
+  endTime     DateTime
+  
+  maxBookings Int                 @default(1)
+  isAvailable Boolean             @default(true)
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+  
+  bookings    CounselingBooking[]
+  
+  @@unique([date, startTime])
+  @@index([date])
+  @@map("counseling_slots")
+}
+
+model CounselingBooking {
+  id          String              @id @default(uuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id])
+  slotId      String
+  slot        CounselingSlot      @relation(fields: [slotId], references: [id])
+  
+  category    CounselingCategory
+  description String              @db.Text
+  phoneNumber String
+  
+  status      CounselingStatus    @default(SCHEDULED)
+  
+  // Counselor notes (admin only)
+  counselorNotes String?          @db.Text
+  counselorId    String?          // Pastor who handled
+  
+  // Reminders
+  reminder24hSent Boolean          @default(false)
+  reminder2hSent  Boolean          @default(false)
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+  
+  @@index([userId])
+  @@index([slotId])
+  @@index([status])
+  @@map("counseling_bookings")
+}
+
+// ============================================
+// SERMONS & MEDIA
+// ============================================
+
+model SermonCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  image       String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  sermons     Sermon[]
+  
+  @@map("sermon_categories")
+}
+
+model Sermon {
+  id              String          @id @default(uuid())
+  title           String
+  slug            String          @unique
+  description     String?         @db.Text
+  
+  categoryId      String
+  category        SermonCategory  @relation(fields: [categoryId], references: [id])
+  
+  preacher        String
+  scripture       String?
+  
+  // Media
+  videoUrl        String?
+  audioUrl        String?
+  thumbnailUrl    String?
+  duration        Int?            // In seconds
+  
+  // YouTube/Facebook
+  youtubeId       String?
+  facebookVideoId String?
+  
+  // Notes & Resources
+  notes           String?         @db.Text
+  downloadUrl     String?         // PDF notes
+  
+  // Stats
+  viewCount       Int             @default(0)
+  likeCount       Int             @default(0)
+  shareCount      Int             @default(0)
+  
+  // Publishing
+  publishedAt     DateTime?
+  isLive          Boolean         @default(false)
+  isFeatured      Boolean         @default(false)
+  
+  tags            String[]
+  
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  deletedAt       DateTime?
+  
+  progress        SermonProgress[]
+  
+  @@index([categoryId])
+  @@index([slug])
+  @@index([publishedAt])
+  @@index([title])
+  @@index([preacher])
+  @@map("sermons")
+}
+
+model SermonProgress {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sermonId    String
+  sermon      Sermon   @relation(fields: [sermonId], references: [id], onDelete: Cascade)
+  
+  progress    Int      @default(0) // Percentage or seconds
+  watchedDuration Int  @default(0) // Total seconds watched
+  completed   Boolean  @default(false)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, sermonId])
+  @@index([userId])
+  @@map("sermon_progress")
+}
+
+// ============================================
+// DEVOTIONALS
+// ============================================
+
+model Devotional {
+  id          String   @id @default(uuid())
+  title       String
+  slug        String   @unique
+  date        DateTime @unique
+  scripture   String
+  content     String   @db.Text
+  
+  audioUrl    String?
+  imageUrl    String?
+  
+  author      String?
+  tags        String[]
+  
+  viewCount   Int      @default(0)
+  readCount   Int      @default(0)
+  shareCount  Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+  
+  reads       DevotionalRead[]
+  
+  @@index([date])
+  @@index([slug])
+  @@map("devotionals")
+}
+
+model DevotionalRead {
+  id          String     @id @default(uuid())
+  userId      String
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  devotionalId String
+  devotional  Devotional @relation(fields: [devotionalId], references: [id], onDelete: Cascade)
+  
+  readAt      DateTime   @default(now())
+  
+  @@unique([userId, devotionalId])
+  @@index([userId])
+  @@index([devotionalId])
+  @@map("devotional_reads")
+}
+
+// ============================================
+// ANNOUNCEMENTS
+// ============================================
+
+model Announcement {
+  id          String                @id @default(uuid())
+  title       String
+  slug        String                @unique
+  content     String                @db.Text
+  category    AnnouncementCategory
+  
+  imageUrl    String?
+  attachments String[]
+  
+  priority    Int                   @default(0)
+  isPinned    Boolean               @default(false)
+  
+  // Publishing
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  
+  viewCount   Int                   @default(0)
+  
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  deletedAt   DateTime?
+  
+  @@index([category])
+  @@index([publishedAt])
+  @@index([title])
+  @@map("announcements")
+}
+
+// ============================================
+// EVENTS
+// ============================================
+
+model Event {
+  id              String              @id @default(uuid())
+  title           String
+  slug            String              @unique
+  description     String              @db.Text
+  category        EventCategory
+  
+  startDate       DateTime
+  endDate         DateTime
+  location        String
+  address         String?
+  
+  imageUrl        String?
+  bannerUrl       String?
+
+  status          EventStatus     @default(UPCOMING)
+  
+  maxAttendees    Int?
+  registrationFee Decimal?            @db.Decimal(10, 2)
+  
+  requiresReg     Boolean             @default(true)
+  isPublished     Boolean             @default(false)
+  isFeatured      Boolean             @default(false)
+  
+  tags            String[]
+  
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  deletedAt       DateTime?
+  
+  registrations   EventRegistration[]
+  
+  @@index([slug])
+  @@index([startDate])
+  @@index([category])
+  @@index([status])
+  @@map("events")
+}
+
+model EventRegistration {
+  id          String                    @id @default(uuid())
+  eventId     String
+  event       Event                     @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User                      @relation(fields: [userId], references: [id])
+  
+  status      EventRegistrationStatus   @default(REGISTERED)
+  
+  // Additional info
+  phoneNumber String?
+  notes       String?
+  
+  // Payment (if applicable)
+  paymentStatus PaymentStatus?
+  paymentRef    String?
+  paidAt        DateTime?
+  
+  createdAt   DateTime                  @default(now())
+  updatedAt   DateTime                  @updatedAt
+  
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId])
+  @@map("event_registrations")
+}
+
+// ============================================
+// PRAYER REQUESTS & TESTIMONIES
+// ============================================
+
+model PrayerRequest {
+  id          String              @id @default(uuid())
+  userId      String?
+  user        User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  title       String
+  description String              @db.Text
+  category    String?
+  
+  isAnonymous Boolean             @default(false)
+  contactInfo String?
+  
+  status      PrayerRequestStatus @default(SUBMITTED)
+  
+  prayedBy    String?             // Pastor name
+  prayedAt    DateTime?
+  response    String?             @db.Text
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+  
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("prayer_requests")
+}
+
+model Testimony {
+  id          String          @id @default(uuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  
+  title       String
+  slug        String          @unique
+  content     String          @db.Text
+  category    String?
+  
+  imageUrl    String?
+  videoUrl    String?
+  
+  status      TestimonyStatus @default(PENDING)
+  
+  // Admin review
+  reviewedBy  String?
+  reviewedAt  DateTime?
+  reviewNotes String?
+  
+  publishedAt DateTime?
+  
+  viewCount   Int             @default(0)
+  likeCount   Int             @default(0)
+  shareCount  Int             @default(0)
+  
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+  
+  @@index([userId])
+  @@index([status])
+  @@index([slug])
+  @@index([publishedAt])
+  @@map("testimonies")
+}
+
+// ============================================
+// WORDS OF WISDOM & KNOWLEDGE
+// ============================================
+
+model WordOfWisdom {
+  id          String      @id @default(uuid())
+  title       String
+  content     String      @db.Text
+  scripture   String?
+  
+  imageUrl    String?
+  category    String?
+  
+  weekOf      DateTime    // Sunday of that week
+  
+  shareCount  Int         @default(0)
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+  
+  savedBy     SavedWord[]
+  
+  @@unique([weekOf])
+  @@index([weekOf])
+  @@map("words_of_wisdom")
+}
+
+model WordOfKnowledge {
+  id          String      @id @default(uuid())
+  title       String
+  content     String      @db.Text
+  scripture   String?
+  
+  imageUrl    String?
+  category    String?
+  
+  weekOf      DateTime    // Sunday of that week
+  
+  shareCount  Int         @default(0)
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  deletedAt   DateTime?
+  
+  savedBy     SavedWord[]
+  
+  @@unique([weekOf])
+  @@index([weekOf])
+  @@map("words_of_knowledge")
+}
+
+model SavedWord {
+  id          String           @id @default(uuid())
+  userId      String
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  wisdomId    String?
+  wisdom      WordOfWisdom?    @relation(fields: [wisdomId], references: [id], onDelete: Cascade)
+  
+  knowledgeId String?
+  knowledge   WordOfKnowledge? @relation(fields: [knowledgeId], references: [id], onDelete: Cascade)
+  
+  createdAt   DateTime         @default(now())
+  
+  @@index([userId])
+  @@map("saved_words")
+}
+
+// ============================================
+// GROUPS & POSTS
+// ============================================
+
+model Group {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?   @db.Text
+  type        GroupType
+  
+  imageUrl    String?
+  coverUrl    String?
+  
+  isActive    Boolean   @default(true)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  
+  members     GroupMember[]
+  posts       GroupPost[]
+  
+  @@map("groups")
+}
+
+model GroupPost {
+  id          String          @id @default(uuid())
+  groupId     String
+  group       Group           @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  
+  content     String          @db.Text
+  type        GroupPostType   @default(TEXT)
+  imageUrls   String[]
+  videoUrl    String?
+  mediaUrl    String?
+  
+  isPinned    Boolean         @default(false)
+  isApproved  Boolean         @default(true)
+  
+  likeCount   Int             @default(0)
+  commentCount Int            @default(0)
+  
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+  
+  likes       GroupPostLike[]
+  comments    GroupPostComment[]
+  
+  @@index([groupId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("group_posts")
+}
+
+model GroupMember {
+  id        String    @id @default(uuid())
+  groupId   String
+  group     Group     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  joinedAt  DateTime  @default(now())
+  
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+  @@map("group_members")
+}
+
+model GroupPostLike {
+  id        String    @id @default(uuid())
+  postId    String
+  post      GroupPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  createdAt DateTime  @default(now())
+  
+  @@unique([postId, userId])
+  @@index([postId])
+  @@index([userId])
+  @@map("group_post_likes")
+}
+
+model GroupPostComment {
+  id        String    @id @default(uuid())
+  postId    String
+  post      GroupPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  content   String    @db.Text
+  
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  
+  @@index([postId])
+  @@index([userId])
+  @@map("group_post_comments")
+}
+
+// ============================================
+// GIVING RECORDS
+// ============================================
+
+model GivingRecord {
+  id          String          @id @default(uuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  
+  category    GivingCategory
+  amount      Decimal         @db.Decimal(10, 2)
+  givenDate   DateTime        @default(now())
+  
+  // Payment
+  paymentMethod PaymentMethod?
+  paymentRef    String?       @unique
+  paymentStatus PaymentStatus @default(PENDING)
+  paidAt        DateTime?
+  
+  notes       String?
+  isAnonymous Boolean         @default(false)
+  
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+  
+  @@index([userId])
+  @@index([category])
+  @@index([givenDate])
+  @@index([createdAt])
+  @@map("giving_records")
+}
+
+// ============================================
+// NOTIFICATIONS
+// ============================================
+
+model Notification {
+  id          String              @id @default(uuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type        NotificationType
+  title       String
+  body        String?             @db.Text
+  message     String              @db.Text
+  
+  imageUrl    String?
+  actionUrl   String?
+  data        String?             @db.Text  // JSON data
+  
+  status      NotificationStatus  @default(PENDING)
+  
+  sentAt      DateTime?
+  readAt      DateTime?
+  
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+  deletedAt   DateTime?
+  
+  @@index([userId])
+  @@index([status])
+  @@index([readAt])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================
+// MEDIA LIBRARY
+// ============================================
+
+model Media {
+  id          String    @id @default(uuid())
+  filename    String
+  originalName String
+  mimeType    String
+  size        Int       // In bytes
+  
+  url         String
+  thumbnailUrl String?
+  
+  type        MediaType
+  
+  // Metadata
+  width       Int?
+  height      Int?
+  duration    Int?      // For audio/video in seconds
+  
+  userId      String?
+  user        User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  
+  @@index([type])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("media")
+}
+
+// ============================================
+// PAYMENTS
+// ============================================
+
+model Payment {
+  id          String          @id @default(uuid())
+  userId      String
+  user        User            @relation(fields: [userId], references: [id])
+  
+  amount      Decimal         @db.Decimal(10, 2)
+  paymentMethod PaymentMethod
+  paymentRef  String          @unique
+  status      PaymentStatus   @default(PENDING)
+  
+  purpose     String          @db.Text
+  referenceId String?         // Order ID, Event ID, etc.
+  metadata    String?         @db.Text  // JSON string
+  
+  paidAt      DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  
+  @@index([userId])
+  @@index([paymentRef])
+  @@index([status])
+  @@index([createdAt])
+  @@map("payments")
+}
+
+// ============================================
+// SYSTEM SETTINGS
+// ============================================
+
+model SystemSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String   @db.Text
+  description String?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("system_settings")
+}
